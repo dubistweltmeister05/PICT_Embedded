@@ -39,18 +39,15 @@ int main(void) {
 	HAL_Init();
 	SystemClock_Config(SYS_CLK_FREQ_168);
 
-	/* Enable clocks */
 	__HAL_RCC_GPIOD_CLK_ENABLE();
 	__HAL_RCC_TIM4_CLK_ENABLE();
 
 	gpio_timer_Init();
 	timer4_init();
 
-	/* Enable TIM4 interrupt in NVIC */
 	HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
 	HAL_NVIC_EnableIRQ(TIM4_IRQn);
 
-	/* Start base timer interrupt (THIS is what triggers PeriodElapsedCallback) */
 	HAL_TIM_Base_Start_IT(&htimer4);
 
 	/* Start PWM channels */
@@ -60,7 +57,7 @@ int main(void) {
 	HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_4);
 
 	while (1) {
-		/* CPU is free, fade handled fully by interrupt */
+
 	}
 }
 
@@ -244,4 +241,5 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_3, brightness);
 		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_4, brightness);
 	}
+
 }
