@@ -30,66 +30,43 @@ void timer4_init();
 
 void gpio_timer_Init();
 
-
-uint32_t pulse1_val = 25000;
-
-uint32_t pulse2_val = 12500;
-
-uint32_t pulse3_val = 6250;
-
-uint32_t pulse4_val = 3125;
-
-int main() {
-	uint32_t brightness;
+volatile uint32_t brightness = 0;
+volatile int8_t dir = 1;
+int main(void) {
 	initialise_monitor_handles();
-
 	printf("Bravo-6 to Gold Eagle Actual -> Going Dark\n");
+
 	HAL_Init();
 	SystemClock_Config(SYS_CLK_FREQ_168);
+
+	/* Enable clocks */
+	__HAL_RCC_GPIOD_CLK_ENABLE();
+	__HAL_RCC_TIM4_CLK_ENABLE();
+
 	gpio_timer_Init();
 	timer4_init();
-	if (HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_1) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_2) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_3) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_4) != HAL_OK) {
-		Error_Handler();
-	}
 
+	/* Enable TIM4 interrupt in NVIC */
+	HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(TIM4_IRQn);
 
+	/* Start base timer interrupt (THIS is what triggers PeriodElapsedCallback) */
+	HAL_TIM_Base_Start_IT(&htimer4);
+
+	/* Start PWM channels */
+	HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Start(&htimer4, TIM_CHANNEL_4);
 
 	while (1) {
-		while (brightness < htimer4.Init.Period) {
-			brightness++;
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_1, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_2, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_3, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_4, brightness);
-			HAL_Delay(1);
-//			printf("THE Brightness value is - %" PRIu32 "\n",brightness);
-		}
-		while (brightness > 0) {
-			brightness--;
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_1, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_2, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_3, brightness);
-			__HAL_TIM_SET_COMPARE(&htimer4, TIM_CHANNEL_4, brightness);
-			HAL_Delay(1);
-//			printf("THE Brightness value is - %" PRIu32 "\n",brightness);
-
-		}
+		/* CPU is free, fade handled fully by interrupt */
 	}
-	return 0;
 }
 
 void timer4_init() {
 	TIM_OC_InitTypeDef tim4_PWM_Config;
-	htimer4.Instance = TIM4; //Standard macro, defined to the Base address of the timer 6.
+	htimer4.Instance = TIM4;
 	htimer4.Init.Prescaler = 4999;
 	htimer4.Init.Period = 3360 - 1;
 	if (HAL_TIM_PWM_Init(&htimer4) != HAL_OK) {
@@ -247,4 +224,24 @@ void SystemClock_Config(uint8_t CLOCK_FREQ) {
 
 	HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq() / 1000);
 	HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+}
+
+void TIM4_IRQHandler(void) {
+	HAL_TIM_IRQHandler(&htimer4);
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM4) {
+		brightness += dir;
+
+		if (brightness >= htimer4.Init.Period)
+			dir = -10;
+		else if (brightness == 0)
+			dir = 10;
+
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, brightness);
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_2, brightness);
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_3, brightness);
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_4, brightness);
+	}
 }
